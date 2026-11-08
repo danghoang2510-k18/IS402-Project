@@ -4,7 +4,7 @@ Tài liệu này là hướng dẫn cấu hình và thu thập bằng chứng. C
 
 ## 1. Liên hệ với rubric gốc
 
-Nguồn đối chiếu: `Rubik Đánh giá bài tập quá trình & Bài tập Lớn.xlsx`, sheet `Bài tập Lớn` (các số hàng dưới đây là số hàng Excel).
+Nguồn đã kiểm tra trực tiếp: `C:\Users\ACER\Downloads\Rubik Đánh giá bài tập quá trình & Bài tập Lớn.xlsx`, sheet `Bài tập Lớn` (các số hàng dưới đây là số hàng Excel). Hàng 24 cho chọn một trong ba hướng Web, Trực quan dữ liệu, Phân tích dữ liệu. Dự án này theo hướng Phân tích dữ liệu (hàng 34–37); hàng 25–33 là tiêu chí của hai hướng khác, không mặc nhiên bắt buộc cho dự án này.
 
 | Rubric | Số đo cần lưu | Nguồn bằng chứng | Giới hạn |
 | --- | --- | --- | --- |

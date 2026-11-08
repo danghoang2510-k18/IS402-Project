@@ -55,6 +55,7 @@ In another shell on the server:
 
 ```bash
 curl http://127.0.0.1:8080/healthz
+curl http://127.0.0.1:8080/dashboard
 curl -X POST http://127.0.0.1:8080/predict \
   -H 'Content-Type: application/json' \
   -d '{"features":{"RevolvingUtilizationOfUnsecuredLines":0.15,"age":52,"NumberOfTime30-59DaysPastDueNotWorse":0,"DebtRatio":0.37,"MonthlyIncome":5400,"NumberOfOpenCreditLinesAndLoans":8,"NumberOfTimes90DaysLate":0,"NumberRealEstateLoansOrLines":1,"NumberOfTime60-89DaysPastDueNotWorse":0,"NumberOfDependents":0}}'
@@ -69,3 +70,7 @@ through one HTTPS reverse proxy on the server VM. Keep Uvicorn bound to loopback
 do not expose port 8080 through the NSG. Add authentication and request logging
 before allowing external users to submit data. Azure Monitor can collect API
 request count, errors and latency once the web/API service is running.
+
+The frontend source is in `web/`, with deployment commands in
+`deployment/azure/web_api.md`. `GET /dashboard` returns selected FL and
+centralized metrics; it does not expose raw client data.

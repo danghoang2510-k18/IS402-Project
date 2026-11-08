@@ -1,0 +1,20 @@
+[Unit]
+Description=Federated credit risk inference API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=azureuser
+Group=azureuser
+WorkingDirectory=/home/azureuser/project-cloud/flower-app
+Environment=MODEL_DIR=/home/azureuser/project-cloud/results/models/run_REPLACE_WITH_RUN_ID
+Environment=PROJECT_RESULTS_ROOT=/home/azureuser/project-cloud/results
+Environment=CENTRAL_METRICS_PATH=/home/azureuser/project-cloud/results/protocol_v1/seed42_iid_clients5_trees20/test_metrics.csv
+ExecStart=/home/azureuser/fl-venv/bin/uvicorn fl_app.api:app --host 127.0.0.1 --port 8080 --workers 1
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

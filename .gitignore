@@ -15,5 +15,7 @@ results/
 .tmp/
 .flower/
 flower-app/dist/
+web/node_modules/
+web/dist/
 *.fab
 

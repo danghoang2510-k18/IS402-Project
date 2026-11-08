@@ -501,3 +501,203 @@ SHA-256 và phiên bản package. Không đưa khóa, SAS hoặc raw CSV lên re
 - [Microsoft: quota vCPU theo region](https://learn.microsoft.com/en-us/azure/quotas/regional-quota-requests)
 - [Flower: TLS cho SuperLink, SuperNode và CLI](https://flower.ai/docs/framework/how-to-enable-tls-connections.html)
 - [Flower: cấu hình profile kết nối](https://flower.ai/docs/framework/main/en/ref-flower-configuration.html)
+
+## 16. Phương án triển khai web và API cho bản demo
+
+### 16.1 Kiến trúc được chọn
+
+```text
+Trình duyệt
+   │ HTTPS 443
+   ▼
+Public IP hiện có → NSG server → Nginx trên vm-fl-server
+                                  ├── /              → HTML/CSS/JavaScript tĩnh
+                                  ├── /api/predict   → FastAPI 127.0.0.1:8080/predict
+                                  └── /api/healthz   → FastAPI 127.0.0.1:8080/healthz
+                                  └── /api/dashboard → FastAPI 127.0.0.1:8080/dashboard
+                                                       │
+                                                       ▼
+                                 results/models/run_<RUN_ID>/{model.json,forest.npz}
+
+Azure Monitor/Workbook ← metrics của 6 VM, latency và log có cấu hình thu thập
+```
+
+Đặt web và API trên **VM server hiện có**, không tạo VM thứ bảy. Nginx phục vụ
+giao diện và chuyển `/api/*` tới Uvicorn ở loopback; trình duyệt chỉ thấy một
+origin HTTPS nên không cần mở CORS rộng. `forest.npz`, CSV test/validation và
+log nội bộ nằm ngoài web root. Mã giao diện và cấu hình mẫu Nginx/systemd đã
+có trong repo; việc cài và chạy trên Azure vẫn cần thực hiện.
+
+| Tài nguyên | Trạng thái | Công dụng và cấu hình đề xuất |
+| --- | --- | --- |
+| `vm-fl-server` East Asia | Đã có | Giữ Flower SuperLink, model artifact, FastAPI, Nginx. Sau huấn luyện, API đọc model một lần; thử tải trước khi quyết định tăng SKU. |
+| Public IP + NIC server | Đã có | Điểm truy cập SSH và HTTPS. Giữ SSH 22 chỉ từ IP quản trị. |
+| NSG server | Đã có, cần bổ sung | Giữ Flower TCP 8000 chỉ từ CIDR client; mở TCP 443 cho người xem demo; không mở 8080. TCP 80 chỉ dùng nếu quy trình cấp/chuyển hướng chứng chỉ cần. |
+| 5 client VM + peering | Đã có | Chỉ phục vụ huấn luyện và thí nghiệm; không nhận request dự đoán từ web. Có thể deallocate sau khi lưu đủ bằng chứng nếu không chạy lại FL. |
+| `forest.npz` + `model.json` | Chưa xác nhận trên Azure | Tạo khi chạy lại FL với mã export mới. Lưu theo `run_id`, kiểm tra checksum, giữ bản được chọn để phục vụ. |
+| Nginx + systemd unit Uvicorn | Cần thêm trên server | Nginx phục vụ static assets và proxy; systemd tự khởi động lại API sau reboot. Chạy một Uvicorn worker trước, đo RAM/latency. |
+| DNS + chứng chỉ HTTPS | Cần quyết định | Dùng subdomain do nhóm/trường sở hữu và chứng chỉ hợp lệ để demo công khai. Nếu chưa có tên miền, thử nội bộ qua SSH tunnel trước; cert Flower hiện tại chỉ dùng cho Flower, không coi là cert web công khai. |
+| Azure Monitor Workbook | Theo phần 14 | Gom hai region, CPU, network, disk, latency; chụp theo UTC interval của run. |
+| Log Analytics + Azure Monitor Agent | Tùy chọn có chi phí | Chỉ bật khi cần guest RAM và log tập trung; đặt retention/thu thập theo nhu cầu rubric. |
+| Blob Storage | Tùy chọn theo rubric | Chỉ tạo nếu triển khai thật bài đo Blob I/O; SCP hiện tại không chứng minh tiêu chí Blob. |
+
+**Lý do chọn VM hiện có:** giảm tài nguyên mới và giữ model cạnh API. Đây là
+phương án demo có giới hạn sẵn sàng: nếu server VM dừng thì web/API cũng dừng;
+huấn luyện đồng thời có thể cạnh tranh CPU/RAM với inference, vì vậy đo tải và
+ưu tiên trình diễn sau khi train xong. Không đưa ra chi phí cố định khi chưa có
+SKU, thời lượng chạy, region và lượng log thực tế; xem Cost Analysis/Budgets.
+
+**Phương án khác:** Azure Static Web Apps Free host giao diện tĩnh và có TLS,
+nhưng khả năng *Bring your own API* tích hợp chỉ có ở Standard và danh sách
+backend hỗ trợ không gồm VM trực tiếp. Nếu chọn Free, trình duyệt vẫn cần gọi
+API VM qua một public HTTPS endpoint riêng, phát sinh CORS, xác thực và quản
+lý hai origin. Vì vậy chưa chọn cho bản demo này.
+
+### 16.2 Các bước triển khai ứng dụng sau khi có model
+
+1. **Chốt artifact:** hoàn thành bước 12; đọc `model_artifact` từ JSON kết quả,
+   kiểm tra `forest.npz`, `model.json` và gọi API ở loopback theo bước 13.
+2. **Giữ API chạy:** tạo systemd service với `WorkingDirectory` là
+   `/home/azureuser/project-cloud/flower-app`, `MODEL_DIR` là thư mục model
+   được chọn, `ExecStart` dùng `/home/azureuser/fl-venv/bin/uvicorn
+   fl_app.api:app --host 127.0.0.1 --port 8080`. Dùng đường dẫn tuyệt đối
+   trong unit; đặt user
+   `azureuser`. Kiểm tra `systemctl status`, `journalctl` và `/healthz` sau
+   reboot. Khi đổi model, cập nhật `MODEL_DIR` và restart service có kiểm tra.
+3. **Dựng giao diện tĩnh:** tạo web form cho đúng 10 feature của
+   `feature_schema.json`. Nginx serve file build ở thư mục riêng, ví dụ
+   `/var/www/fl-credit/`; chỉ public các metrics JSON đã lọc dữ liệu cần trình
+   bày. Không đưa `data/`, `certs/`, `results/models/` vào web root.
+4. **Reverse proxy:** cấu hình Nginx chuyển `/api/predict` sang
+   `http://127.0.0.1:8080/predict` và `/api/healthz` sang `/healthz`; giữ
+   phương thức POST, `Content-Type: application/json`, giới hạn request body
+   và timeout. Frontend gọi đường dẫn tương đối `/api/predict`.
+5. **HTTPS và truy cập:** gắn DNS/subdomain vào public IP server; cấp TLS cert
+   cho Nginx, mở NSG TCP 443. Kiểm tra từ máy Windows bằng trình duyệt và
+   `curl`. Giới hạn demo bằng xác thực ở proxy hoặc ứng dụng; thêm rate limit.
+   Không log số liệu tài chính người dùng trong access log; chỉ lưu request ID,
+   status, elapsed time và model version. Nếu chưa có domain/cert, demo nội
+   bộ bằng SSH tunnel thay vì public endpoint HTTP không mã hóa.
+6. **Giám sát và chứng cứ:** ghi UTC start/end, model run ID, 20–50 request
+   thử với dữ liệu giả, số success/error, p50/p95 latency, CPU/RAM server.
+   Lưu ảnh màn hình web, JSON trả về, log đã loại dữ liệu nhạy cảm và biểu đồ
+   Azure Monitor. Kiểm tra cost trước/sau giai đoạn demo.
+
+### 16.3 Hợp đồng API và dữ liệu hiển thị
+
+API **đã có** `GET /healthz`, `GET /dashboard` và `POST /predict` trong `fl_app/api.py`.
+Request `POST /predict` chứa object `features` với tên đặc trưng đúng schema.
+Response gồm `risk_probability`, `predicted_label`, `threshold`,
+`imputed_features`, `model_run_id`, `mode`. Frontend cần hiện `mode` và
+`model_run_id` cạnh kết quả để truy vết; giải thích `predicted_label` là kết
+quả theo ngưỡng validation, không phải quyết định cấp tín dụng. Nút “Thử dữ
+liệu mẫu” phải dùng dữ liệu giả, không điền một hồ sơ thật mặc định.
+
+Trang So sánh đọc `/api/dashboard`, endpoint lọc metric từ JSON FL và hàng
+`centralized,best_f1` của CSV; không xuất raw CSV ra web. API hiện chưa có
+endpoint `/runs`, `/metrics` hoặc lưu lịch sử người dùng. Không gửi model
+artifact hoặc private IP vào tài nguyên web tĩnh. Lệnh build, copy và bật
+service: xem [web_api.md](web_api.md).
+
+## 17. Danh sách frame cần thiết cho web và rubric
+
+`Frame` ở đây là **màn hình giao diện**; Azure Monitor Workbook là màn hình
+giám sát riêng trong Azure. Đã kiểm tra trực tiếp sheet **Bài tập Lớn** của
+`C:\Users\ACER\Downloads\Rubik Đánh giá bài tập quá trình & Bài tập Lớn.xlsx`.
+Hàng 24 nói phần này chọn **một trong ba hướng**: Web, Trực quan dữ liệu, hoặc
+Phân tích dữ liệu. Dự án Federated Random Forest theo hướng **Phân tích dữ
+liệu**, nên các hàng **34–37** là phần trực tiếp cần chứng minh:
+
+| Hàng rubric gốc | Điểm | Yêu cầu | Bằng chứng của dự án |
+| --- | ---: | --- | --- |
+| 34 | 1,0 | Huấn luyện model trên tập dữ liệu | Notebook centralized, 5 SuperNode và Flower run thành công; split/seed, log và model artifact. |
+| 35 | 0,5 | API cho phép sử dụng model | FastAPI `/predict` chạy trên Azure, request/response thực. |
+| 36 | 1,0 | Trực quan kết quả trên tham số hoặc loại model | Bảng/biểu đồ Centralized vs FL-IID; thêm FL non-IID khi có run thật; confusion matrix và ngưỡng. |
+| 37 | 0,5 | Web gửi request tới API cloud, nhận và parse kết quả | Form dự đoán F2 chạy trên Azure, hiển thị response, xử lý lỗi. |
+
+Hàng **25–28** (ít nhất 4 trang web, blue/green, 2 service, FaaS) thuộc
+hướng **Web**; hàng **29–33** (4 report trên SaaS, realtime, chia sẻ theo
+quyền, mobile responsive) thuộc hướng **Trực quan dữ liệu**. Chúng không nên
+được trình bày như yêu cầu bắt buộc đồng thời của hướng Phân tích dữ liệu.
+Một website responsive và các frame bổ sung vẫn giúp demo, nhưng không phải
+căn cứ để tự nhận điểm của hai hướng còn lại.
+
+**Ba frame lõi cần triển khai cho hàng 34–37 là F1–F3.** F4–F6 là màn hình
+bổ trợ cho các tiêu chí hạ tầng, dữ liệu và báo cáo ở những mục khác của rubric;
+có thể đưa chúng vào báo cáo/Workbook thay vì xây thành trang web riêng.
+
+| Frame | Nội dung và tương tác | Nguồn dữ liệu | Liên hệ rubric |
+| --- | --- | --- | --- |
+| **F1 – Tổng quan** | Tên đề tài, trạng thái model/API, run ID, 1 server + 5 client, hai region, 100 cây; thẻ ROC-AUC/AP/F1 của run được chọn; nút “Dự đoán” và “Xem so sánh”. | JSON kết quả FL + `/healthz` | Giải thích mô hình đã huấn luyện (hàng 34), điều hướng demo. |
+| **F2 – Dự đoán rủi ro** | Form 10 đặc trưng với nhãn, đơn vị/giải thích ngắn; kiểm tra số hợp lệ, biểu thị trường điền median; nút gửi và trạng thái loading/error. Kết quả hiện xác suất, ngưỡng, nhãn, phiên bản model; không hiển thị “duyệt/từ chối vay”. | `POST /api/predict` | API/web và inference thực (hàng 35, 37). |
+| **F3 – So sánh mô hình** | Bảng và biểu đồ Centralized vs FL-IID; thêm FL non-IID khi có run thật. Cùng hàng cho ROC-AUC, AP, F1, precision, recall, threshold, confusion matrix, 100 cây, train/test size. Có ghi rõ central dùng toàn bộ train còn IID là cách chia cho client. | Centralized CSV/JSON + FL JSON đã kiểm chứng | Chất lượng model, trực quan và phép so sánh công bằng (hàng 34–36). |
+| **F4 – Thí nghiệm & topology (bổ trợ)** | Sơ đồ server East Asia, client 1–2 East Asia, client 3–5 Korea Central; seed, split 60/20/20, cây/client, từng client row count, SHA check, thời gian run. Phần network tách payload NumPy khỏi network bytes. | Manifest split, Flower JSON, log đo đạc | Kiến trúc cloud, ETL/split, cross-region latency, thời gian và tài nguyên (hàng 6–7, 19, 21). |
+| **F5 – Giám sát & chi phí (bổ trợ)** | Liên kết Workbook/ảnh có timestamp; CPU/RAM/network/disk, p50/p95 TCP latency theo region, API request count/error/p50/p95, Cost Analysis và quota. Chỉ hiện số đã đo; gắn thời gian và nguồn cho mỗi chart. | Azure Monitor, Connection Monitor, API log, Cost Analysis | Vận hành, region và chi phí (hàng 6–7, 21, 44). |
+| **F6 – Dữ liệu & bằng chứng (bổ trợ)** | Nguồn dữ liệu, số hàng, split/hash, train-only median, client partitions, danh sách artifact và link tải báo cáo đã lọc. Thêm bảng Blob upload/download throughput/latency **chỉ khi đã thực hiện phép đo Blob thật**. | Split metadata, summary, log, Blob metrics nếu có | Data/ETL, Blob I/O và tính tái lập (hàng 18–19, 22). |
+
+**Ưu tiên xây dựng:** F1–F3 với F2 dự đoán thật là lõi demo; F4–F6 phục vụ
+minh chứng và có thể trình bày bằng báo cáo/Workbook. Không cần
+thêm frame đăng nhập hay quản trị phức tạp nếu proxy chỉ mở cho nhóm chấm;
+nếu demo công khai thì bổ sung bước xác thực ở 16.2.
+
+### 17.1 Wireframe chữ cho ba frame lõi
+
+```text
+F1 TỔNG QUAN
+[Logo/Đề tài] [Tổng quan] [Dự đoán] [So sánh] [Thí nghiệm] [Giám sát]
+[Model online?] [Run ID] [IID / 5 client / 100 cây]
+[ROC-AUC] [Average Precision] [F1]
+[Sơ đồ 2 region + 6 VM]           [Chạy thử dự đoán →]
+[Nguồn dữ liệu | seed | thời điểm run | giới hạn phép đo]
+
+F2 DỰ ĐOÁN
+[10 trường feature theo schema; chỉ rõ đơn vị và trường có thể bỏ trống]
+[Dữ liệu mẫu] [Xóa] [Dự đoán]
+[Trạng thái API / lỗi validation]
+[Xác suất rủi ro] [Ngưỡng] [Nhãn 0/1]
+[Trường được điền median] [Model run ID] [Giải thích phạm vi học thuật]
+
+F3 SO SÁNH
+[Chọn run FL-IID] [Chọn run FL-non-IID nếu có]
+[Centralized | FL-IID | FL-non-IID: AP, AUC, F1, precision, recall]
+[Biểu đồ metric] [Hai confusion matrix] [Threshold từng mô hình]
+[Cùng split/test/seed; 100 cây; khác cách phân bổ train]
+```
+
+### 17.2 Tiêu chí nghiệm thu web
+
+1. `/healthz` sẵn sàng và hiển thị đúng `model_run_id`; một request mẫu qua
+   trình duyệt trả kết quả giống gọi API trực tiếp với cùng JSON input.
+2. Không có file `forest.npz`, raw CSV, private key hoặc thông tin riêng của
+   client truy cập được qua URL web.
+3. F3 dùng **cùng test 30.000 hàng** và nêu rõ central vs FL-IID; non-IID chỉ
+   hiện sau khi run và lưu artifact thật. Có nhãn threshold từng mô hình.
+4. F4–F6 có nguồn, UTC interval và run ID cho số liệu; không trình bày
+   `numeric_payload_bytes` như tổng traffic mạng, không trình bày SCP là Blob.
+5. Có bằng chứng HTTPS/auth, API success/error/latency, Azure Monitor của hai
+   region, chi phí/quota và ảnh demo để nộp cùng báo cáo.
+
+### 17.3 Việc còn phải làm để frame có dữ liệu thật
+
+| Việc | Lý do | Đầu ra kiểm chứng |
+| --- | --- | --- |
+| Chạy lại FL với mã export | Run Azure trước đây chỉ in metrics | `model.json`, `forest.npz`, JSON có `model_artifact` |
+| Triển khai frontend và Nginx/systemd | Mã và cấu hình mẫu đã có, chưa xác nhận web chạy trên Azure | URL HTTPS, ảnh F1–F3 và request dự đoán thật |
+| Đo và ghi API latency/error | API hiện chưa gửi custom metrics vào Azure Monitor | Log hoặc dashboard có request count, error rate, p50/p95 |
+| Chạy non-IID trên cùng holdout | Hiện mới có kết quả Azure IID được xác nhận | JSON FL non-IID và hàng so sánh F3 |
+| Tự động hóa ETL nếu rubric yêu cầu | Notebook chia file thủ công chưa chứng minh ETL tự động | Log pipeline, số hàng, SHA, trạng thái theo run ID |
+| Thực hiện benchmark Blob nếu rubric yêu cầu | SCP chưa phải Azure Blob I/O | Upload/download timings và Blob Metrics thật |
+| Chốt giám sát và chi phí | Screenshot trống không phải bằng chứng phép đo | Workbook, latency hai region, Cost Analysis theo UTC interval |
+
+**Nguồn rubric đã xác minh:** sheet `Bài tập Lớn` trong file Excel ở đường dẫn
+ghi trên. Bảng đối chiếu cũ tại `deployment/azure/monitoring.md` vẫn hữu ích
+cho việc đo đạc, nhưng không dùng nó để gộp ba hướng ở hàng 24 thành một bộ
+yêu cầu bắt buộc. Dữ liệu `data/cs-training.csv` hiện khoảng **7,56 MB**;
+rubric hàng 6 có thang kích thước KB/MB/GB, nên cần báo kích thước thực và
+không tự nhận mức dữ liệu GB hoặc `>4GB`.
+
+### Nguồn cập nhật cho phương án web
+
+- [Microsoft: các gói Azure Static Web Apps](https://learn.microsoft.com/en-us/azure/static-web-apps/plans)
+- [Microsoft: phạm vi API của Static Web Apps](https://learn.microsoft.com/en-us/azure/static-web-apps/apis-overview)
+- [Microsoft: chi phí Log Analytics](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/cost-logs)
