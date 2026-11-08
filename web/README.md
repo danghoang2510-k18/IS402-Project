@@ -19,6 +19,18 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
+Nếu PowerShell báo `pnpm` không tồn tại nhưng `node` và `npm` đã có, thư mục
+`web/node_modules` hiện đã được cài bằng pnpm. Chạy trực tiếp trong `web`:
+
+```powershell
+npm.cmd run dev
+```
+
+Không chạy `npm install` trên `node_modules` do pnpm tạo: npm có thể báo
+`EUNSUPPORTEDPROTOCOL workspace:*` khi đọc package nội bộ. Nếu cần cài lại từ
+đầu, dùng pnpm với `pnpm install --frozen-lockfile`. Nếu `node` hoặc `npm` chưa
+có, cài Node.js LTS và mở PowerShell mới.
+
 Mở `http://127.0.0.1:5173`. Vite chuyển `/api/*` đến FastAPI loopback. Nếu model chưa có, trang Dự đoán hiện lỗi kết nối và trang So sánh chỉ hiện những metric đã có; các giá trị này không được suy diễn từ dữ liệu mẫu của Figma.
 
 `pnpm exec tsc --noEmit` kiểm tra TypeScript; `pnpm build` tạo `web/dist/` để Nginx phục vụ. Không chép CSV thô, chứng chỉ, `forest.npz` hoặc `model.json` vào `dist/`.

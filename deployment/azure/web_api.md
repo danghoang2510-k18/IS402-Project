@@ -12,6 +12,9 @@ pnpm exec tsc --noEmit
 pnpm build
 ```
 
+Nếu không có `pnpm` nhưng `web/node_modules` đã được cài bằng pnpm, dùng
+`npm.cmd run build` mà không chạy `npm install` trên thư mục đó.
+
 ## 2. Chép mã API, metrics và web lên server
 
 Trong PowerShell:
