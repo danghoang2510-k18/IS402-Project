@@ -1,5 +1,7 @@
 # Serving the federated forest on Azure
 
+**Luồng hiện dùng:** model và metrics được upload vào `artifacts/runs/<run_id>/`, API đọc `latest-iid.json` để tự đổi model. Xem [model-artifacts.md](model-artifacts.md). Các lệnh `MODEL_DIR` bên dưới là chế độ local/fallback để thử một run cố định.
+
 The Flower run writes metrics and a separate model directory on the server VM:
 
 ```text
@@ -13,8 +15,8 @@ results/
 `model.json` records the feature order, training medians, validation-selected threshold,
 run ID, tree count and array checksum. `forest.npz` contains numeric tree arrays and
 is read with `allow_pickle=False`. The model directory contains no raw client CSVs.
-The prior IID run produced only a metrics JSON; deploy the updated code and run
-Flower once more to create a model artifact.
+Run IID hiện tại đã có model artifact trên server; có thể publish run này lên
+Blob mà không huấn luyện lại theo [model-artifacts.md](model-artifacts.md).
 
 ## Deploy the updated code
 
@@ -23,11 +25,15 @@ From PowerShell on the Windows project machine:
 ```powershell
 $project = "C:\Users\ACER\Documents\ChatGPT\Project Cloud"
 scp "$project\flower-app\fl_app\server_app.py" `
+    "$project\flower-app\fl_app\client_app.py" `
+    "$project\flower-app\fl_app\evaluation.py" `
     "$project\flower-app\fl_app\model_artifact.py" `
     "$project\flower-app\fl_app\api.py" `
     vm-fl-server:/home/azureuser/project-cloud/flower-app/fl_app/
 scp "$project\flower-app\pyproject.toml" `
     vm-fl-server:/home/azureuser/project-cloud/flower-app/pyproject.toml
+scp "$project\data\experiments\split_seed_42\split_metadata.json" `
+    vm-fl-server:/home/azureuser/project-cloud/data/experiments/split_seed_42/
 ```
 
 The clients need no code update for this change. On the server, keep the existing
@@ -72,5 +78,5 @@ before allowing external users to submit data. Azure Monitor can collect API
 request count, errors and latency once the web/API service is running.
 
 The frontend source is in `web/`, with deployment commands in
-`deployment/azure/web_api.md`. `GET /dashboard` returns selected FL and
+`deployment/azure/web-api.md`. `GET /dashboard` returns selected FL and
 centralized metrics; it does not expose raw client data.

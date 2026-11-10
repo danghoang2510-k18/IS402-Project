@@ -7,7 +7,10 @@ Wants=network-online.target
 User=azureuser
 Group=azureuser
 WorkingDirectory=/home/azureuser/project-cloud/flower-app
-Environment=MODEL_DIR=/home/azureuser/project-cloud/results/models/run_REPLACE_WITH_RUN_ID
+Environment=ARTIFACT_BLOB_BASE_URL=https://storagedataflrf.blob.core.windows.net/artifacts
+Environment=MODEL_REFRESH_SECONDS=30
+Environment=MODEL_MODE=iid
+Environment=MODEL_CACHE_ROOT=/home/azureuser/project-cloud/results/model_cache
 Environment=PROJECT_RESULTS_ROOT=/home/azureuser/project-cloud/results
 Environment=CENTRAL_METRICS_PATH=/home/azureuser/project-cloud/results/protocol_v1/seed42_iid_clients5_trees20/test_metrics.csv
 ExecStart=/home/azureuser/fl-venv/bin/uvicorn fl_app.api:app --host 127.0.0.1 --port 8080 --workers 1

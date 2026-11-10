@@ -1,21 +1,55 @@
-.env
-__pycache__/
-.pytest_cache/
-data/*.csv
-data/processed/
-data/partitions/
-data/test/
-data/experiments/
+# Local datasets, generated splits, metrics, models, logs and packet evidence
+data/
 results/
 *.pkl
 *.joblib
-.vendor/
+*.npz
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.pcap
+*.pcapng
+*.fab
+
+# Credentials and locally generated certificates
+.env
+.env.*
+!.env.example
+!.env.sample
+certs/
+.azure/
+.ssh/
+*.key
+*.pem
+*.pfx
+
+# Python and Jupyter caches/environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.ipynb_checkpoints/
+.virtual_documents/
+anaconda_projects/
 .venv/
 .packages/
+.vendor/
 .tmp/
 .flower/
+.flwr/
+
+# Generated application bundles
 flower-app/dist/
 web/node_modules/
 web/dist/
-*.fab
+web/.vite/
+*.tar.gz
+*.zip
+
+# Operating-system files
+.DS_Store
+Thumbs.db
 

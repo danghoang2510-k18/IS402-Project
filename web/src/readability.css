@@ -1,0 +1,295 @@
+/* Readable type scale and layout overrides for laptop and phone screens. */
+html {
+  min-width: 320px;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.app {
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.header-inner,
+.context-bar > div,
+main {
+  max-width: 1360px;
+}
+
+.header-inner,
+.context-bar > div {
+  padding-left: clamp(18px, 3vw, 36px);
+  padding-right: clamp(18px, 3vw, 36px);
+}
+
+main {
+  padding: 32px clamp(18px, 3vw, 36px) 44px;
+}
+
+footer {
+  max-width: 1288px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(18px, 3vw, 36px);
+  padding-right: clamp(18px, 3vw, 36px);
+}
+
+.brand-word { font-size: 26px; }
+.brand-word small { font-size: 10px; letter-spacing: 0.05em; }
+nav a { font-size: 14px; }
+.header-meta,
+.version,
+.context-bar > div,
+.preview-label { font-size: 12px; }
+.eyebrow,
+.research-label,
+.hero-copy > .badge { font-size: 12px; letter-spacing: 0.06em; }
+.badge,
+.mini-label,
+.tiny-tag { font-size: 11px; line-height: 1.45; }
+.badge { white-space: normal; }
+.hero { gap: clamp(28px, 4vw, 64px); }
+.hero h1 { font-size: clamp(34px, 3.3vw, 48px); line-height: 1.24; }
+.hero-copy > p,
+.page-heading p { font-size: 15px; line-height: 1.7; }
+.hero-detail,
+.deployment-heading p,
+.status-row,
+.run-box code,
+.deployment-stats > div > span,
+.deployment-stats small,
+.deployment-foot { font-size: 12px; }
+.deployment-heading strong { font-size: 16px; }
+.run-box > span { font-size: 11px; }
+.run-box code { overflow-wrap: anywhere; }
+.deployment-stats strong { font-size: 22px; }
+.button { font-size: 14px; min-height: 44px; }
+h2,
+.section-heading h2,
+.chart-panel h2,
+.matrix-panel h2 { font-size: 19px; line-height: 1.35; }
+.section-heading p,
+.panel-heading p,
+.muted,
+.method > .muted:last-child { font-size: 13px; line-height: 1.6; }
+.metric-top { font-size: 14px; }
+.metric-value { font-size: 36px; }
+.metric-bottom { font-size: 12px; line-height: 1.5; gap: 10px; }
+.tooltip > span,
+.bar-tooltip { font-size: 12px; }
+.tooltip > span { max-width: min(260px, 75vw); }
+
+/* The topology labels were especially small in the original design. */
+.region-label,
+.region-label > span:last-child { font-size: 11px; letter-spacing: 0.02em; }
+.region-dot { width: 8px; height: 8px; }
+.client span,
+.client small,
+.flow-connector > span,
+.server-node > span:not(.badge),
+.api-node > span,
+.server-node .badge,
+.api-node code,
+.diagram-foot,
+.azure-caption { font-size: 11px; line-height: 1.35; }
+.client { min-width: 0; padding: 10px 4px; }
+.client span { text-align: center; }
+.server-node > strong,
+.api-node > strong { font-size: 14px; }
+.api-node code { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.flow-connector > span { margin-top: -37px; }
+.diagram-foot { flex-wrap: wrap; gap: 8px; }
+.split-bar { height: 36px; font-size: 12px; }
+.split-labels,
+.method-row,
+.method-note,
+.research-notice { font-size: 12px; line-height: 1.6; }
+.method-note,
+.method-row { gap: 10px; }
+.method-row { flex-wrap: wrap; }
+.method-row strong { text-align: right; }
+.research-notice > span { font-size: 11px; }
+footer,
+.footer-brand { font-size: 12px; line-height: 1.5; }
+
+.page-heading h1 { font-size: clamp(30px, 3vw, 38px); line-height: 1.3; }
+.number-field label { font-size: 14px; min-height: 0; line-height: 1.45; }
+.field-index,
+.optional,
+.field-help,
+.field-help code,
+.input-wrap > span { font-size: 12px; }
+.field-help { line-height: 1.5; }
+.input-wrap { min-height: 48px; }
+.input-wrap input,
+.input-wrap input::placeholder,
+select { font-size: 16px; }
+.form-note,
+.text-button,
+.empty-state p,
+.safety-note strong,
+.safety-note p,
+.developer-panel summary,
+.developer-panel p,
+.developer-panel pre,
+.developer-panel .switch-label { font-size: 13px; line-height: 1.6; }
+.empty-state h3 { font-size: 17px; }
+.result-label,
+.risk-labels,
+.result-details > div,
+.result-details code,
+.imputed h3,
+.imputed p,
+.imputed ul { font-size: 12px; }
+.result-details > div { flex-wrap: wrap; }
+.comparison-banner,
+.chart-legend,
+.bar-row > span,
+.bar > span,
+.chart-foot,
+.matrix-axis,
+.vertical-axis,
+.matrix-col-labels,
+.matrix-cell > span,
+.matrix-cell small,
+.matrix-note,
+.limitations ul,
+.non-iid p,
+.scroll-hint { font-size: 12px; line-height: 1.5; }
+.non-iid h3,
+.limitations h2 { font-size: 16px; }
+table { font-size: 13px; min-width: 680px; }
+th { font-size: 12px; }
+th .badge { font-size: 11px; }
+.table-scroll { max-width: 100%; scrollbar-gutter: stable; }
+.matrix-cell strong { font-size: 27px; }
+.bar-row > span { width: 130px; }
+.chart-grid { left: 145px; }
+.bar { min-height: 38px; }
+.bar > span { top: 10px; }
+
+/* Leave enough space for readable labels on 13-inch laptops. */
+@media (max-width: 1220px) {
+  .header-meta > span:not(.version) { display: none; }
+  .bottom-grid,
+  .comparison-top { grid-template-columns: minmax(0, 1fr); }
+  .prediction-grid { grid-template-columns: minmax(0, 1fr); }
+  .result-column { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result-panel { grid-row: span 2; }
+  .hero { grid-template-columns: minmax(0, 1fr) minmax(330px, 0.85fr); }
+}
+
+@media (max-width: 800px) {
+  .site-header { height: auto; }
+  .header-inner { gap: 10px; padding-top: 14px; }
+  .brand-word small { font-size: 9px; }
+  nav { gap: 4px; height: auto; }
+  nav a {
+    min-height: 48px;
+    font-size: 13px;
+    justify-content: center;
+    padding: 0 6px;
+  }
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .deployment-card { width: 100%; }
+  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-card:last-child { grid-column: 1 / -1; }
+  .matrix-grid { grid-template-columns: minmax(0, 1fr); }
+  .comparison-bottom { grid-template-columns: minmax(0, 1fr); }
+  .result-column { grid-template-columns: minmax(0, 1fr); }
+  .result-panel { grid-row: auto; }
+}
+
+@media (max-width: 600px) {
+  main { padding: 22px 16px 36px; }
+  .header-inner,
+  .context-bar > div { padding-left: 16px; padding-right: 16px; }
+  .brand-word { font-size: 23px; }
+  .header-meta > span:not(.version) { display: none; }
+  nav a { font-size: 12px; gap: 5px; }
+  nav a svg { width: 17px; height: 17px; }
+  .context-bar > div { font-size: 11px; flex-wrap: wrap; }
+  .context-bar > div > span:first-child { display: none; }
+  .context-bar > div > svg { display: none; }
+  .preview-label { font-size: 11px; gap: 5px; }
+  .hero h1 { font-size: clamp(31px, 8vw, 39px); }
+  .hero-actions { flex-wrap: wrap; }
+  .hero-actions .button { font-size: 14px; flex: 1 1 150px; }
+  .hero-detail { flex-wrap: wrap; gap: 10px 18px; }
+  .deployment-stats { gap: 12px; }
+  .deployment-stats > div + div { padding-left: 12px; }
+  .metric-grid { grid-template-columns: minmax(0, 1fr); }
+  .metric-card:last-child { grid-column: auto; }
+  .metric-value { font-size: 35px; }
+  .section-heading h2,
+  .architecture h2,
+  .method h2 { font-size: 19px; }
+  .section-heading p,
+  .architecture .panel-heading p,
+  .form-panel .panel-heading p { font-size: 13px; }
+  .architecture { padding: 18px 16px 0; }
+  .flow { flex-direction: column; align-items: stretch; gap: 8px; }
+  .clients { width: 100%; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .region { padding: 12px; }
+  .region-label,
+  .region-label > span:last-child { font-size: 11px; }
+  .client-row { gap: 8px; }
+  .client { padding: 10px 5px; }
+  .client span,
+  .client small { font-size: 12px; }
+  .flow > .flow-connector,
+  .flow > .flow-connector:not(.short),
+  .flow-connector.short {
+    width: 100%;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+  .flow-connector > span,
+  .flow > .flow-connector:not(.short) > span {
+    margin: 0;
+    font-size: 11px;
+  }
+  .flow-connector br { display: none; }
+  .flow .connector-line,
+  .flow > .flow-connector:not(.short) .connector-line {
+    width: 28px;
+    transform: rotate(90deg);
+  }
+  .server-node,
+  .api-node { width: 100%; padding: 16px 10px; }
+  .server-node > strong,
+  .api-node > strong { font-size: 16px; }
+  .server-node > span:not(.badge),
+  .api-node > span,
+  .server-node .badge,
+  .api-node code { font-size: 12px; }
+  .diagram-foot,
+  .azure-caption { font-size: 11px; width: auto; margin: 0; }
+  .split-labels { flex-wrap: wrap; gap: 8px 14px; }
+  .research-notice { font-size: 12px; }
+  .page-heading h1 { font-size: 30px; }
+  .page-heading p { font-size: 14px; }
+  .form-panel { padding: 20px 16px; }
+  .fields-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .number-field label { font-size: 14px; }
+  .input-wrap input { font-size: 16px; }
+  .form-actions .button { font-size: 14px; }
+  .chart-panel select { font-size: 16px; }
+  .bar-row { flex-direction: column; align-items: stretch; gap: 4px; }
+  .bar-row > span { width: auto; font-size: 12px; }
+  .chart-grid { left: 0; }
+  .bar-track { padding-right: 38px; }
+  .bar > span { font-size: 12px; }
+  .table-panel { padding: 18px 14px; }
+  .scroll-hint { font-size: 12px; }
+  .matrix-cell > span small { display: block; font-size: 11px; }
+  .matrix-cell small { font-size: 11px; }
+  footer { margin: 0; padding: 20px 16px; font-size: 12px; }
+  footer > span { font-size: 12px; }
+}

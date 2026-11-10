@@ -162,7 +162,7 @@ tuần tự các cell tạo split/partition. Kiểm tra:
 ```powershell
 $project = 'C:\Users\ACER\Documents\ChatGPT\Project Cloud'
 $split = Join-Path $project 'data\experiments\split_seed_42'
-Get-Item (Join-Path $split 'feature_schema.json'), (Join-Path $split 'validation.csv'), (Join-Path $split 'test.csv')
+Get-Item (Join-Path $split 'feature_schema.json'), (Join-Path $split 'split_metadata.json'), (Join-Path $split 'validation.csv'), (Join-Path $split 'test.csv')
 Get-Content (Join-Path $split 'iid\clients_5\summary.json')
 ```
 
@@ -176,7 +176,7 @@ Trên server, tạo thư mục:
 
 ```powershell
 ssh vm-fl-server 'mkdir -p ~/project-cloud/data/experiments/split_seed_42/iid/clients_5 ~/project-cloud/results'
-scp (Join-Path $split 'feature_schema.json') (Join-Path $split 'validation.csv') (Join-Path $split 'test.csv') `
+scp (Join-Path $split 'feature_schema.json') (Join-Path $split 'split_metadata.json') (Join-Path $split 'validation.csv') (Join-Path $split 'test.csv') `
   vm-fl-server:/home/azureuser/project-cloud/data/experiments/split_seed_42/
 scp (Join-Path $split 'iid\clients_5\summary.json') `
   vm-fl-server:/home/azureuser/project-cloud/data/experiments/split_seed_42/iid/clients_5/
@@ -200,7 +200,7 @@ foreach ($id in 1..5) {
 
 Kiểm tra hash từng CSV bằng `Get-FileHash -Algorithm SHA256` trên Windows và
 `sha256sum` trên VM; đối chiếu với `summary.json`. Server chỉ giữ validation,
-test, schema, summary; không cần 5 CSV client. Client không nhận test labels.
+test, schema, split metadata, summary; không cần 5 CSV client. Client không nhận test labels.
 
 ## 8. Chuyển Flower App lên server
 
@@ -215,6 +215,8 @@ Nếu server đã có app và chỉ cập nhật phần xuất mô hình/API:
 ```powershell
 scp (Join-Path $project 'flower-app\fl_app\server_app.py') `
     (Join-Path $project 'flower-app\fl_app\model_artifact.py') `
+    (Join-Path $project 'flower-app\fl_app\evaluation.py') `
+    (Join-Path $project 'flower-app\fl_app\client_app.py') `
     (Join-Path $project 'flower-app\fl_app\api.py') `
     vm-fl-server:/home/azureuser/project-cloud/flower-app/fl_app/
 scp (Join-Path $project 'flower-app\pyproject.toml') `
@@ -234,6 +236,8 @@ Lỗi cũ: `requires-python = ">=3.10"` làm dependency resolution thất bại 
 Flower 1.42.0 cần Python >=3.11. File hiện phải là `>=3.11,<4.0`. Cảnh báo
 `Recommended property "license" missing` không làm run thất bại. Flower tự
 đưa app tới SuperNode khi chạy; không cần SCP `api.py` lên 5 client.
+Để đo đủ metric, chạy lại với `evaluation.py`, `client_app.py` mới và chuyển
+`split_metadata.json` lên server trước khi bắt đầu.
 
 ## 9. Tạo CA, certificate và chép CA tới client
 
@@ -407,6 +411,8 @@ server có artifact tổng hợp; client không cần nhận model triển khai 
 
 ## 13. Chạy API để web gọi dự đoán
 
+Luồng hiện dùng là publish model lên Blob và API tự nạp `latest-iid.json` qua Managed Identity. Xem [model-artifacts.md](model-artifacts.md) để cấu hình. Các lệnh `MODEL_DIR` bên dưới chỉ dùng để thử một model cố định khi chưa bật Blob artifact.
+
 Trên server, lấy `MODEL_DIR` từ JSON kết quả thay vì gõ run ID cũ:
 
 ```bash
@@ -458,8 +464,10 @@ Monitor**, đo TCP tới server private IP:8000 từ từng client, lưu p50/p95
 phân nhóm region. Ghi thời gian bắt đầu/kết thúc run và kích thước CSV, JSON,
 model. VM network totals gồm cả SSH và traffic khác, không được gọi là payload
 Flower chính xác. Azure Monitor không tự tính model metrics; giữ JSON riêng.
-Nếu rubric cần Blob I/O, phải thật sự dùng Blob và đo ingress/egress/latency
-trong Storage Account; lần triển khai này dùng SCP nên chưa có bằng chứng Blob.
+Run IID đã dùng Blob cho partition và validation/test; JSON có thời gian tải
+Blob theo client và server. Xem [blob-data.md](blob-data.md) để đối chiếu với
+Azure Storage metrics theo cùng khoảng UTC; thời gian ứng dụng không thay thế
+Storage service latency.
 Xem Cost Management/Quotas để ghi chi phí và vCPU theo region. Nếu đo API,
 thu request count, lỗi, p50/p95 latency sau khi API chạy.
 
@@ -597,7 +605,7 @@ Trang So sánh đọc `/api/dashboard`, endpoint lọc metric từ JSON FL và h
 `centralized,best_f1` của CSV; không xuất raw CSV ra web. API hiện chưa có
 endpoint `/runs`, `/metrics` hoặc lưu lịch sử người dùng. Không gửi model
 artifact hoặc private IP vào tài nguyên web tĩnh. Lệnh build, copy và bật
-service: xem [web_api.md](web_api.md).
+service: xem [web-api.md](web-api.md).
 
 ## 17. Danh sách frame cần thiết cho web và rubric
 
@@ -681,12 +689,12 @@ F3 SO SÁNH
 
 | Việc | Lý do | Đầu ra kiểm chứng |
 | --- | --- | --- |
-| Chạy lại FL với mã export | Run Azure trước đây chỉ in metrics | `model.json`, `forest.npz`, JSON có `model_artifact` |
-| Triển khai frontend và Nginx/systemd | Mã và cấu hình mẫu đã có, chưa xác nhận web chạy trên Azure | URL HTTPS, ảnh F1–F3 và request dự đoán thật |
+| Chạy lại FL với mã export | Đã có run IID `6558643287244268762`, model và metrics trên Blob | Run kế tiếp xác nhận tự publish `latest-iid.json` |
+| Triển khai frontend và Nginx/systemd | Preview Azure đã hoạt động qua SSH tunnel; chưa công khai HTTPS | Domain, TLS, ảnh F1–F3 và request dự đoán thật qua HTTPS |
 | Đo và ghi API latency/error | API hiện chưa gửi custom metrics vào Azure Monitor | Log hoặc dashboard có request count, error rate, p50/p95 |
 | Chạy non-IID trên cùng holdout | Hiện mới có kết quả Azure IID được xác nhận | JSON FL non-IID và hàng so sánh F3 |
 | Tự động hóa ETL nếu rubric yêu cầu | Notebook chia file thủ công chưa chứng minh ETL tự động | Log pipeline, số hàng, SHA, trạng thái theo run ID |
-| Thực hiện benchmark Blob nếu rubric yêu cầu | SCP chưa phải Azure Blob I/O | Upload/download timings và Blob Metrics thật |
+| Thực hiện benchmark Blob nếu rubric yêu cầu | Đã có download timings trong JSON; cần số Azure Storage Metrics cùng UTC | Upload/download timings và Blob Metrics thật |
 | Chốt giám sát và chi phí | Screenshot trống không phải bằng chứng phép đo | Workbook, latency hai region, Cost Analysis theo UTC interval |
 
 **Nguồn rubric đã xác minh:** sheet `Bài tập Lớn` trong file Excel ở đường dẫn

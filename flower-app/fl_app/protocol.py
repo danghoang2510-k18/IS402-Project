@@ -73,6 +73,48 @@ def prepare_split(source: Path, root: Path, seed: int = 42) -> Path:
     return split_dir
 
 
+def prepare_external_inference(source: Path, split_dir: Path) -> Path:
+    """Prepare unlabeled competition test with train-only medians; never score it."""
+    schema_path = split_dir / "feature_schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    raw = pd.read_csv(source)
+    id_columns = [name for name in raw if str(name).startswith("Unnamed:")]
+    if len(id_columns) != 1 or schema["target"] not in raw:
+        raise ValueError("Expected one source ID column and the empty target column")
+    features = schema["features"]
+    if set(raw.columns) != set([id_columns[0], schema["target"]] + features):
+        raise ValueError("External test features differ from training schema")
+    if raw[schema["target"]].notna().any():
+        raise ValueError("External test has labels; do not treat it as unlabeled inference")
+    ids = pd.to_numeric(raw[id_columns[0]], errors="raise")
+    if ids.isna().any() or ids.duplicated().any():
+        raise ValueError("Invalid external source row IDs")
+    values = raw[features].apply(pd.to_numeric, errors="raise")
+    if np.isinf(values.to_numpy(dtype=float)).any():
+        raise ValueError("External test has infinite values")
+    missing = {name: int(values[name].isna().sum()) for name in features}
+    values = values.fillna(schema["medians"])
+    if not np.isfinite(values.to_numpy(dtype=float)).all():
+        raise ValueError("External test still has missing/nonfinite values")
+    output = values.copy()
+    output.insert(0, ROW_ID, ids.to_numpy())
+    path = split_dir / "external_inference.csv"
+    output.to_csv(path, index=False, float_format="%.17g")
+    metadata = {
+        "role": "unlabeled_external_inference_only",
+        "source_sha256": sha256(source),
+        "feature_schema_sha256": sha256(schema_path),
+        "rows": len(output),
+        "missing_before_imputation": missing,
+        "imputation": schema["imputation"],
+        "output_sha256": sha256(path),
+    }
+    (split_dir / "external_inference_metadata.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8"
+    )
+    return path
+
+
 def partition_train(split_dir: Path, mode: str = "iid", alpha: float = 0.5,
                     clients: int = 5, seed: int = 42) -> Path:
     train = pd.read_csv(split_dir / "train.csv")
@@ -112,10 +154,13 @@ def partition_train(split_dir: Path, mode: str = "iid", alpha: float = 0.5,
 
 
 def read_checked(path: Path, schema: dict) -> pd.DataFrame:
-    frame = pd.read_csv(path)
+    return validate_checked(pd.read_csv(path), schema, str(path))
+
+
+def validate_checked(frame: pd.DataFrame, schema: dict, label: str) -> pd.DataFrame:
     expected = [ROW_ID, TARGET] + schema["features"]
     if list(frame.columns) != expected or frame.isna().any().any():
-        raise ValueError(f"Invalid split or partition schema: {path}")
+        raise ValueError(f"Invalid split or partition schema: {label}")
     if not set(frame[TARGET].unique()).issubset({0, 1}) or frame[ROW_ID].duplicated().any():
         raise ValueError("Invalid target or duplicate source row IDs")
     if not np.isfinite(frame[schema["features"]].to_numpy(float)).all():

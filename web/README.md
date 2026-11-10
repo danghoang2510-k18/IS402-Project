@@ -35,4 +35,4 @@ Mở `http://127.0.0.1:5173`. Vite chuyển `/api/*` đến FastAPI loopback. N�
 
 `pnpm exec tsc --noEmit` kiểm tra TypeScript; `pnpm build` tạo `web/dist/` để Nginx phục vụ. Không chép CSV thô, chứng chỉ, `forest.npz` hoặc `model.json` vào `dist/`.
 
-Hướng dẫn chạy trên Azure: [deployment/azure/web_api.md](../deployment/azure/web_api.md).
+Hướng dẫn chạy trên Azure: [deployment/azure/web-api.md](../deployment/azure/web-api.md).

@@ -134,11 +134,11 @@ type ModelMetrics = {
   confusion_matrix: { tn: number; fp: number; fn: number; tp: number };
   mode?: string;
   num_clients?: number;
-  run_id?: number;
+  run_id?: string;
   model_matches_loaded_artifact?: boolean;
 };
 type DashboardData = { fl: ModelMetrics | null; central: ModelMetrics | null; missing: string[] };
-type HealthData = { status: string; run_id: number; mode: string };
+type HealthData = { status: string; run_id: string; mode: string };
 const nav: { id: Page; label: string; icon: IconName }[] = [
   { id: "overview", label: "Tổng quan", icon: "grid" },
   { id: "predict", label: "Dự đoán", icon: "activity" },
@@ -569,7 +569,7 @@ type Result = {
   predicted_label: 0 | 1;
   threshold: number;
   imputed_features: string[];
-  model_run_id: string | number;
+  model_run_id: string;
   mode: string;
 };
 type FormValues = Record<string, string>;
@@ -604,7 +604,7 @@ function isResult(data: unknown): data is Result {
     d.threshold <= 1 &&
     Array.isArray(d.imputed_features) &&
     d.imputed_features.every((v) => typeof v === "string") &&
-    (typeof d.model_run_id === "string" || typeof d.model_run_id === "number") &&
+    typeof d.model_run_id === "string" &&
     typeof d.mode === "string"
   );
 }
@@ -1113,15 +1113,19 @@ export default function App() {
   const [health, setHealth] = useState<HealthData | null>(null);
   useEffect(() => {
     let active = true;
-    fetch("/api/dashboard", { signal: AbortSignal.timeout(10000) })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Dashboard unavailable")))
-      .then((data: DashboardData) => { if (active) setDashboard(data); })
-      .catch(() => { if (active) setDashboard(null); });
-    fetch("/api/healthz", { signal: AbortSignal.timeout(10000) })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Model unavailable")))
-      .then((data: HealthData) => { if (active && data.status === "ready") setHealth(data); })
-      .catch(() => { if (active) setHealth(null); });
-    return () => { active = false; };
+    const refresh = () => {
+      fetch("/api/dashboard", { signal: AbortSignal.timeout(10000) })
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error("Dashboard unavailable")))
+        .then((data: DashboardData) => { if (active) setDashboard(data); })
+        .catch(() => { if (active) setDashboard(null); });
+      fetch("/api/healthz", { signal: AbortSignal.timeout(10000) })
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error("Model unavailable")))
+        .then((data: HealthData) => { if (active) setHealth(data.status === "ready" ? data : null); })
+        .catch(() => { if (active) setHealth(null); });
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 30000);
+    return () => { active = false; window.clearInterval(interval); };
   }, []);
   const initialPage = () =>
     nav.some((n) => n.id === window.location.hash.slice(1))

@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from fl_app.model_artifact import load_model
+from fl_app.cloud_artifacts import LatestBlobModel
 
 
 app = FastAPI(title="Federated Credit Risk API", version="1.0")
@@ -23,20 +24,46 @@ class PredictionRequest(BaseModel):
 
 
 @lru_cache(maxsize=1)
-def _model():
+def _local_model():
     directory = os.environ.get("MODEL_DIR")
     if not directory:
         raise RuntimeError("Set MODEL_DIR to a saved model directory")
     return load_model(Path(directory))
 
 
+@lru_cache(maxsize=1)
+def _cloud_model():
+    return LatestBlobModel(
+        os.environ["ARTIFACT_BLOB_BASE_URL"],
+        Path(os.environ.get("MODEL_CACHE_ROOT", "results/model_cache")),
+        float(os.environ.get("MODEL_REFRESH_SECONDS", "30")),
+        os.environ.get("MODEL_MODE", "iid"),
+    )
+
+
+def _model_bundle():
+    if os.environ.get("ARTIFACT_BLOB_BASE_URL"):
+        return _cloud_model().get()
+    forest, manifest = _local_model()
+    return forest, manifest, None
+
+
+def _model():
+    forest, manifest, _ = _model_bundle()
+    return forest, manifest
+
+
 @app.get("/healthz")
 def healthz():
     try:
         _, manifest = _model()
-    except (OSError, ValueError, KeyError, RuntimeError) as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"status": "ready", "run_id": manifest["run_id"], "mode": manifest["mode"]}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Model is unavailable") from exc
+    response = {"status": "ready", "run_id": str(manifest["run_id"]), "mode": manifest["mode"],
+                "model_source": "blob" if os.environ.get("ARTIFACT_BLOB_BASE_URL") else "local"}
+    if os.environ.get("ARTIFACT_BLOB_BASE_URL") and _cloud_model().last_refresh_error:
+        response["refresh_warning"] = "Latest model could not be loaded; serving the last verified model"
+    return response
 
 
 @app.get("/dashboard")
@@ -51,19 +78,28 @@ def dashboard():
         results_root / "protocol_v1/seed42_iid_clients5_trees20/test_metrics.csv",
     ))
     output: dict = {"fl": None, "central": None, "missing": []}
-    if fl_path.is_file():
-        result = json.loads(fl_path.read_text(encoding="utf-8"))
+    cloud_metrics = None
+    if os.environ.get("ARTIFACT_BLOB_BASE_URL"):
+        try:
+            _, current_manifest, cloud_metrics = _model_bundle()
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Model is unavailable") from exc
+    if cloud_metrics is not None or fl_path.is_file():
+        result = cloud_metrics if cloud_metrics is not None else json.loads(fl_path.read_text(encoding="utf-8"))
         output["fl"] = {key: result[key] for key in (
             "mode", "num_clients", "total_trees", "test_rows", "roc_auc",
             "average_precision", "f1", "precision", "recall", "confusion_matrix",
         )}
         output["fl"]["threshold"] = result["threshold_selected_on_validation"]
         output["fl"]["model_matches_loaded_artifact"] = False
-        if result.get("model_artifact"):
+        if cloud_metrics is not None:
+            output["fl"]["run_id"] = str(current_manifest["run_id"])
+            output["fl"]["model_matches_loaded_artifact"] = result.get("run_id") == current_manifest["run_id"]
+        elif result.get("model_artifact"):
             try:
                 _, manifest = _model()
                 if Path(result["model_artifact"]).resolve() == (Path(os.environ["MODEL_DIR"]) / "model.json").resolve():
-                    output["fl"]["run_id"] = manifest["run_id"]
+                    output["fl"]["run_id"] = str(manifest["run_id"])
                     output["fl"]["model_matches_loaded_artifact"] = True
             except (OSError, ValueError, KeyError, RuntimeError):
                 pass
@@ -93,7 +129,7 @@ def dashboard():
 def predict(request: PredictionRequest):
     try:
         forest, manifest = _model()
-    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+    except Exception as exc:
         raise HTTPException(status_code=503, detail="Model is unavailable") from exc
     features = manifest["features"]
     unknown = sorted(set(request.features) - set(features))
@@ -116,6 +152,6 @@ def predict(request: PredictionRequest):
         "predicted_label": int(probability >= threshold),
         "threshold": threshold,
         "imputed_features": imputed,
-        "model_run_id": manifest["run_id"],
+        "model_run_id": str(manifest["run_id"]),
         "mode": manifest["mode"],
     }
